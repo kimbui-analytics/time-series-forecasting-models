@@ -1,159 +1,187 @@
-# Time Series Forecasting: Model Suitability by Data Structure
+# What I Learned About Time Series Forecasting by Actually Testing different Models
 
-This project explores how different time series models perform depending on the structural characteristics of the data.
+When I first started exploring time series forecasting, I kept hearing the same model names over and over:
 
-Rather than applying models blindly, each model is evaluated on data that aligns with its assumptions.
+- ARIMA  
+- Holt-Winters  
+- Seasonal models  
+- Naive baselines  
+
+For this project: 
+
+> I didn’t just want to *use* these models — I wanted to understand when they actually make sense.
+
+Flipping the process from starting with a dataset and try to force models onto it.
+
+**What kind of data structure makes each model appropriate?**
+
+> **Context is considered first in this case** and the project became an experiment in matching models to structure.
+
+Below is what I learned.
 
 ---
 
-## Case Study 1: When the Naive Model Is Optimal  
-### Dataset: S&P 500 Daily Closing Prices
+# Lesson 1: Sometimes Simple Is Already Optimal  
+## Case Study: S&P 500 (Daily)
 
-### Objective
-Demonstrate a scenario where a naive forecast is theoretically justified and empirically strong.
+I started with daily S&P 500 closing prices.
 
-### Model
-Naive forecast:
+The naive forecast assumes:
+> Tomorrow equals today.
 
-\[
-\hat{y}_{t+1} = y_t
-\]
-
-Tomorrow’s value equals today’s value.
-
-Equivalent to:
-- ARIMA(0,1,0)
-- Random walk model
-
-### Evaluation Setup
-- Last 90 days held out as test set
-- Chronological train/test split
-- Metrics: MAPE, MAE, RMSE
+While this is overly simple, the results make the naive model forecast extremely difficult to beat.
 
 ### Results
 
 | Metric | Value |
 |--------|-------|
-| MAPE | 0.83% |
+| MAPE | **0.83%** |
 | MAE | 57.57 |
 | RMSE | 68.67 |
 
 ![S&P 500 Naive Forecast](data/sp500_naive_plot.png)
 
-### Interpretation
+### What This Taught Me
 
-The naive forecast achieved extremely low percentage error.
+- Financial markets behave close to a random walk.
+- Short-term price movements are very difficult to predict.
+- Adding complexity does not automatically improve forecasts.
 
-This suggests:
-- The S&P 500 behaves close to a random walk.
-- Short-term forecasting is extremely difficult.
-- Additional model complexity may not yield meaningful gains.
+Learning Lesson:
+
+> Complexity does not guarantee better performance.
+
+Sometimes, the structure of the data simply doesn’t allow for strong predictive improvements.
 
 ---
 
-# Case Study 2: Trend + Seasonality
-## Dataset: U.S. Retail Sales (Not Seasonally Adjusted)
+# Lesson 2: Seasonality Alone Isn’t Enough  
+## Case Study: Retail Sales (Monthly, Not Seasonally Adjusted)
 
-### Objective
-Evaluate naive vs seasonal naive on a modern series with strong seasonal effects *and* strong trend, and use the outcome to motivate a better-suited model.
+Retail sales are clearly seasonal. Holiday spikes are visible every year.
 
-### Dataset Details
-- Source: FRED `RSXFSN` (Not Seasonally Adjusted)
-- Frequency: Monthly
-- Time range: 1992–Present
-- Target: Retail sales level
-- Note: We intentionally use **not seasonally adjusted** data so the seasonal pattern remains in the series.
+So I assumed seasonal naive would dominate.
 
-### Models Compared
-**Naive**
-\\[
-\\hat{y}_{t+1} = y_t
-\\]
+Seasonal naive predicts:
 
-**Seasonal Naive (12-month)**
-\\[
-\\hat{y}_{t+12} = y_t
-\\]
-Forecast for a given month equals the same month from the previous year.
+>Next December equals last December.
 
-### Evaluation Setup
-- Holdout: last 24 months (**2024-01** to **2025-12**)
-- Chronological train/test split
-- Metrics: MAPE, MAE, RMSE
-
-### Results
-| Model | MAPE | MAE | RMSE |
-|---|---:|---:|---:|
-| Naive | **8.30%** | 49,084.38 | 58,606.81 |
-| Seasonal Naive (12) | 10.00% | 61,143.33 | 64,245.21 |
-
-### Interpretation
-Contrary to the “seasonal naive should win” intuition, **naive outperformed seasonal naive** in this modern retail dataset.
-
-This suggests:
-- Retail sales have strong yearly seasonality **and** strong upward trend.
-- Seasonal naive captures the repeating seasonal pattern, but **does not account for growth**.
-- Using last year’s value can systematically underpredict the current level when trend dominates seasonal amplitude.
-
-In this holdout period, the series behaved more like “level persistence with trend” than “stable year-over-year repetition.”
-
-### Visual
-![Retail Sales Naive vs Seasonal Naive](data/retail_sales_naive_vs_seasonal_naive_plot.png)
-
-### Key Insight
-**Seasonal naive handles repeating patterns, but fails when trend is strong.**
-
-This motivates a model family that estimates:
-- Level
-- Trend
-- Seasonality
-
-## Holt-Winters (Triple Exponential Smoothing)
-
-### Why Holt-Winters?
-The retail sales series exhibits **both**:
-
-- **Trend** (the overall level rises over time)
-- **Yearly seasonality** (recurring holiday-driven peaks and troughs)
-
-Naive forecasting captures short-term persistence, and seasonal naive captures repeating patterns, but neither can represent **trend + seasonality simultaneously**. Holt-Winters explicitly models:
-
-- **Level** (baseline value)
-- **Trend** (direction and rate of change)
-- **Seasonality** (recurring annual pattern)
-
-### Model specification
-We fit Holt-Winters exponential smoothing with:
-
-- **Additive trend**
-- **Additive seasonality** (period = 12 months)
-
-This configuration is appropriate when seasonal swings are relatively constant in magnitude over time.
-
-### Evaluation setup
-- Holdout window: **2024-01** to **2025-12** (last 24 months)
-- Metrics: MAPE, MAE, RMSE
-- Chronological train/test split (no shuffling)
-
-### Results
+But when I tested it against naive:
 
 | Model | MAPE |
-|---|---:|
+|--------|-------|
+| Naive | **8.30%** |
+| Seasonal Naive | 10.00% |
+
+Naive actually performed better.
+
+### Why?
+
+Retail sales don’t just repeat — they **grow over time**.
+
+Using last year’s value underestimates the current level because of trend.
+
+Learning Lesson
+
+> Seasonality without accounting for growth can still fail.
+
+---
+
+# Lesson 3: When Structure Is Explicitly Modeled, Performance Improves Dramatically  
+## Holt-Winters (Trend + Seasonality)
+
+Retail sales contain:
+
+- A long-term upward trend  
+- A repeating yearly pattern  
+
+Holt-Winters models both simultaneously.
+
+When I tested it:
+
+| Model | MAPE |
+|--------|-------|
 | Naive | 8.30% |
-| Seasonal Naive (12) | 10.00% |
+| Seasonal Naive | 10.00% |
 | **Holt-Winters** | **1.80%** |
 
-### Interpretation
-Holt-Winters dramatically outperformed both baselines, indicating that retail sales are highly predictable once **trend and seasonality** are modeled jointly.
+### What This Taught Me
 
-- Seasonal naive underperformed because it uses last year’s value and does not adjust for **year-over-year growth**.
-- Naive underperformed because it ignores the **annual seasonal pattern**.
-- Holt-Winters succeeded because it estimates level, trend, and seasonality together.
+When both trend and seasonality are present:
 
-### Key insight
-**When a time series contains both trend and stable seasonality, Holt-Winters can deliver large forecast accuracy gains over naive baselines.**
+- You must model both explicitly.
+- Ignoring either one costs accuracy.
+- Structured models outperform simple baselines by a wide margin.
 
-### Visual
+Learning Lesson:
+
+> Model structure should reflect data structure.
+
 ![Retail Sales Holt-Winters Forecast](data/retail_sales_holt_winters_plot.png)
-"""
+
 ---
+
+# Lesson 4: ARIMA Works When the Data Has Memory  
+## Case Study: CPI Month-over-Month Inflation
+
+Unlike retail sales, inflation doesn’t trend upward forever.  
+It fluctuates around a relatively stable average.
+
+However, it does show short-term patterns.
+
+If inflation was high last month, it often remains elevated this month.
+
+This is where ARIMA comes in.
+
+### Results
+
+| Model | MAE | RMSE |
+|--------|--------|--------|
+| Naive | 0.1151 | 0.1447 |
+| **ARIMA(1,0,1)** | **0.1026** | **0.1318** |
+
+ARIMA improved forecast accuracy by roughly 10–11%.
+
+### What This Taught Me
+
+Inflation contains short-term patterns that naive ignores.
+
+ARIMA improves performance because it:
+
+- Uses recent values intelligently
+- Adjusts forecasts based on recent errors
+- Captures short-term structure
+
+The key insight:
+
+> ARIMA works best when data fluctuates around a stable average but contains short-term patterns. We evaluate the model metrics based on MAE / RMSE because inflation values are close to zero, which MAPE is unsuitable for (since it divides by the actual value).
+
+---
+
+# My Final Conclusions
+
+1. **There is no universal "best model"**: Depending on the dataset structure can help determine which model will be a good 'fit'.
+
+| Dataset | Structure | Best Model | Why |
+|----------|------------|------------|------|
+| S&P 500 | Random walk | Naive | Little predictable structure |
+| Retail Sales | Trend + Seasonality | Holt-Winters | Must model growth and repeating patterns |
+| CPI Inflation | Stable average + short-term patterns | ARIMA | Uses recent behavior to improve forecasts |
+
+2. **Start Simple**: Iterate continuously as you set a baseline to benchmark honestly, add complexity only when it is justified, and let the data guide the model.
+
+3. **Forecasting is more than using a model**: It requires understanding the data structure/context, choosing the right tool, evaluating rigorously and communicating clearly.
+
+---
+
+If I extend this project further, I’d like to explore:
+
+- Rolling cross-validation  
+- Seasonal ARIMA (SARIMA)  
+- Exogenous variable models (ARIMAX)  
+- Business decision simulations  
+
+But the foundation is now clear:
+
+**Good forecasting starts with understanding the data, not the model.**
+

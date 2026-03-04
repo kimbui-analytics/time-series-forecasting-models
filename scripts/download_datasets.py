@@ -100,4 +100,4 @@ inflation_df = inflation.to_frame(name="inflation_mom")
 inflation_df.to_csv("data/cpi_inflation_mom.csv", index_label="date")
 
 print("Saved: data/cpi_inflation_mom.csv")
-print(inflation_df.tail())
+print(inflation_df.head())
